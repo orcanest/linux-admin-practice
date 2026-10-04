@@ -112,11 +112,7 @@ cat /etc/os-release
 ---
 برای درک عمیق‌ تر مفاهیم سیستم‌ عامل و نحوه‌ ی کار Linux ، می‌توان از Repository های زیر استفاده کرد :
 
-|#|BOOk| Description|
-|---|---|---|
-|01|[Operating Systems: Three Easy Pieces](https://github.com/orcanest/Operating-Systems)|مرجع اصلی|
-|02|[How Linux Works](https://github.com/orcanest/How-Linux-Works)|سیستم عامل لینوکس چگونه کار می کند ؟|
-
-
-
-
+| # | BOOk | Description | Author |
+|---|---|---|---|
+|01|[Operating Systems: Three Easy Pieces](https://github.com/orcanest/Operating-Systems)|مرجع اصلی سیستم عامل| Saeid Behjat |
+|02|[How Linux Works](https://github.com/orcanest/How-Linux-Works)|سیستم عامل لینوکس چگونه کار می کند ؟| Saeid Behjat |
