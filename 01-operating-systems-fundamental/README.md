@@ -109,6 +109,18 @@ cat /etc/os-release
 
 در Linux و سیستم‌ های Unix-like ، بسیاری از منابع سیستم از طریق Interface هایی شبیه فایل در اختیار کاربران و برنامه‌ ها قرار می‌ گیرند برای مثال Device ها در مسیر```dev/```  قابل مشاهده هستند. همچنین اطلاعات مختلف مربوط به Kernel و Process ها از طریق فایل‌ سیستم‌ های مجازی مانند ```proc/``` و ```sys/``` در اختیار سیستم قرار می‌ گیرند ، به همین دلیل در Linux با مفهوم معروف **Everything is a file** مواجه می‌ شویم. البته این عبارت یک ساده‌ سازی مفهومی است و به این معنی نیست که واقعاً تمام اجزای سیستم یک فایل معمولی هستند.
 
+
+#### ⚙️ ویژگی های LINUX
+
+- Open Source
+- Free
+- Inherited of Unix Software : server, database, programming
+- High scalable
+- Many bussinessess on Linux
+- Secure
+- Administration and developers both can used
+
+
 ---
 برای درک عمیق‌ تر مفاهیم سیستم‌ عامل و نحوه‌ ی کار Linux ، می‌توان از Repository های زیر استفاده کرد :
 
