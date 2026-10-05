@@ -1,19 +1,277 @@
 ## System Information
+### 🐧 An Overview of Monitoring, System Information, and System Metadata Tools in Linux
 
-#### 📄 Command list :
+در لینوکس ، ابزارهایی مانند uname و hostname و  lscpu و free و uptime برای مشاهده اطلاعات سیستم ، وضعیت resource و برخی Metadata های مربوط به سیستم استفاده می‌ شوند. این ابزارها در User Space اجرا می‌ شوند و بسته به نوع Command ، اطلاعات مورد نیاز خود را از Interface های مختلف Linux مانند System Call ها و procfs (/proc) و  sysfs (/sys) و  فایل‌ های Configuration و سایر Interface های User Space دریافت می‌ کنند.
 
-- uname 
-- hostname
-- hostnamectl
-- arch
-- lscpu
-- lsmem
-- free
-- uptime
-- date
-- cal
-- whoami
-- id
+بنابراین همه Command ها الزاماً یک مسیر یکسان مانند ```Command → glibc → System Call → Kernel``` را طی نمی‌ کنند. برخی مستقیماً proc/ یا sys/ را می‌ خوانند ، برخی از System Call استفاده می‌ کنند و برخی نیز اطلاعات را از چند منبع مختلف جمع‌آوری و ترکیب می‌ کنند.
+
+---
+
+### 🧠 Under the Hood Architecture
+
+به‌ صورت کلی ، هنگام اجرای ابزارهای System Information و Monitoring ، داده‌ ها می‌ توانند از مسیرهای مختلفی در اختیار User Space قرار بگیرند :
+
+#### 1️⃣ -  استفاده از System Call یا Kernel API
+
+وقتی یک User یک command را اجرا می‌ کند ، معمولاً خود command به‌ تنهایی نمی‌ تواند مستقیماً به منابع اصلی سیستم مثل Process ، Memory ، Disk ، Network یا Hardware دسترسی داشته باشد. برای این کار باید از امکاناتی که Kernel در اختیار User Space قرار داده استفاده کند که جریان کلی به این شکل است :
+
+```bash
+User
+  ↓
+Shell
+  ↓
+Command / Executable
+  ↓
+Library / User-Space Interface
+  ↓
+System Call / Kernel Interface
+  ↓
+Kernel Subsystem
+  ↓
+Kernel Data Structures
+  ↓
+User-Space Output
+```
+
+در ابتدا User یک command را در Terminal وارد می‌ کند. Shell command را بررسی می‌ کند و اگر لازم باشد executable مربوط به آن را اجرا می‌ کند. خود Command / Executable در User Space اجرا می‌ شود. اگر برای انجام کارش به اطلاعات یا منابعی نیاز داشته باشد که در اختیار Kernel هستند، نمی‌ تواند مستقیماً وارد Kernel شود. در اینجا از Library یا سایر User-Space Interface ها استفاده می‌ کند. این Interface ها معمولاً در نهایت یک System Call را اجرا می‌ کنند. System Call راه استانداردی است که یک برنامه در User Space از طریق آن از Kernel درخواست سرویس می‌ کند.
+
+مثلاً یک برنامه برای خواندن فایل ، نوشتن در فایل ، ساختن Process ، گرفتن اطلاعات سیستم ، ارسال Packet در شبکه و گرفتن اطلاعات از Memory می‌تواند از System Call های مربوطه استفاده کند.  بعد از System Call ، درخواست وارد **Kernel Space** می‌ شود و Kernel آن را به **Kernel Subsystem** مربوطه مثل File System یا Process Management یا Memory Management یا Networking یا Device Drivers  می‌ دهد. Kernel با استفاده از **Kernel Data Structures** اطلاعات مورد نیاز را پیدا یا تغییر می‌ دهد و نتیجه را دوباره به User Space برمی‌ گرداند. در نهایت command یا برنامه نتیجه را دریافت کرده و آن را به شکل ** User-Space Output** ، مثلاً در Terminal نمایش می‌ دهد. 
+
+به عنوان فرض کنیم دستور ```uname -r``` را اجرا کنیم و جریان کلی می‌ تواند به این شکل باشد :
+```bash
+User
+  ↓
+Shell
+  ↓
+uname
+  ↓
+glibc / User-Space Interface
+  ↓
+uname() System Call
+  ↓
+Kernel
+  ↓
+UTS Namespace / Kernel Data
+  ↓
+Kernel → User Space
+  ↓
+uname -r
+  ↓
+6.x.x-xx-generic
+```
+
+💡 نکته مهم این است که **System Call همان مرز اصلی بین User Space و Kernel Space است**. برنامه‌ های User Space برای انجام بسیاری از کارهای حساس و دسترسی به منابع سیستم ، از طریق همین Interface با Kernel ارتباط برقرار می‌ کنند. به زبان خیلی ساده **Command درخواست را می‌ دهد ، System Call درخواست را به Kernel می‌ رساند ، Kernel کار را انجام می‌ دهد و نتیجه را به برنامه بر می‌ گرداند**.
+
+#### 💎 مرز بین User Space و Kernel Space
+
+در Linux دو محیط اصلی داریم به نام User Space و Kernel Space که برنامه‌هایی مثل bash ، ls ، uname ، ssh و بیشتر برنامه‌ های معمولی در **User Space** اجرا می‌ شوند. Kernel در **Kernel Space** اجرا می‌ شود و دسترسی بسیار بیشتری به resource های سیستم دارد. یک برنامه در User Space نمی‌ تواند هر کاری که خواست مستقیماً روی این منابع انجام دهد. برای درخواست بعضی از این کارها باید از **System Call** استفاده کند. پس می‌توان گفت **System Call یکی از مرزهای اصلی ارتباط بین User Space و Kernel Space است**.
+
+##### 🔹 تعریف Library : 
+
+در لینوکس **Library خودش Kernel نیست و System Call هم نیست** ، در واقع Library یک مجموعه کد آماده است که در User Space قرار دارد و برنامه‌ ها می‌ توانند از آن استفاده کنند. مثلاً در Linux یکی از مهم‌ ترین Library ها glibc است. برنامه‌ ای که می‌ خواهد یک کار مشخص انجام دهد ، خیلی وقت‌ ها به‌ جای اینکه مستقیماً با جزئیات System Call کار کند ، از یک function داخل Library استفاده می‌ کند و Library کار برنامه‌ نویس را ساده‌ تر می‌کند و خیلی از جزئیات Low-level را خودش مدیریت می‌ کند ، مثلاً :
+```bash
+Application
+     ↓
+glibc function
+     ↓
+System Call
+     ↓
+Kernel
+```
+
+##### 🔹 تعریف System Call :
+
+در لینوکس **System Call یک درخواست رسمی از User Space به Kernel است**. وقتی یک برنامه نیاز دارد کاری را انجام دهد که فقط Kernel می‌ تواند انجام دهد ، از System Call استفاده می‌ کند ، مثلاً :
+
+```bash
+open()    → Open a file
+read()    → Read data
+write()   → Write data
+fork()    → Create a process
+execve()  → Execute a program
+socket()  → Create a network socket
+```
+
+البته باید دقت کنیم که اسم‌هایی مثل()open یا()read می‌ توانند در سطح Library هم به شکل function در اختیار برنامه باشند. چیزی که در نهایت مهم است ، **ورود درخواست به Kernel از طریق System Call Interface** است.
+
+#### 💎 تفاوت Library و System Call
+
+به ساده‌ ترین شکل ، Library یک ابزار و واسط در User Space است و System Call راه ورود درخواست از User Space به Kernel است بنابراین Library قبل از مرز Kernel قرار دارد ، ولی System Call مرز ارتباط با Kernel را طی می‌ کند.
+
+```
+User Space
+──────────────────────────────
+
+Application
+     ↓
+Library Function
+     ↓
+System Call Interface
+     
+──────────────────────────────
+        Kernel Boundary
+──────────────────────────────
+
+     ↓
+Kernel Subsystem
+     ↓
+Kernel Data
+```
+
+به عنوان مثال فرض کنیم یک برنامه می‌ خواهد یک File را بخواند و جریان کلی می‌ تواند این‌ طور باشد :
+```bash
+Application
+     ↓
+fopen() / fread()
+     ↓
+glibc
+     ↓
+openat() / read()
+     ↓
+System Call
+     ↓
+Kernel
+     ↓
+VFS / Filesystem
+     ↓
+Storage Device
+```
+
+اینجا glibc در User Space است. برنامه از function های glibc استفاده می‌ کند و glibc در صورت نیاز System Call مناسب را انجام می‌ دهد. بعد درخواست وارد Kernel می‌ شود و Kernel عملیات مربوط به File System و Storage را انجام می‌ دهد. پس مرز دقیقاً کجاست؟ می‌توانیم تصویر را این‌ طور ببینیم :
+
+```bash
+USER SPACE
+─────────────────────────────────────
+User
+↓
+Shell
+↓
+Command / Application
+↓
+Library (e.g., glibc)
+↓
+System Call Wrapper
+│
+│
+│  ← **Still User Space here**
+│
+═════════════════════════════════════
+SYSTEM CALL BOUNDARY
+═════════════════════════════════════
+│
+│  ← **Entry into Kernel**
+↓
+System Call Handler
+↓
+Kernel Subsystem
+↓
+Kernel Data Structures
+↓
+Hardware / Resources
+─────────────────────────────────────
+KERNEL SPACE
+```
+
+یعنی خود Library در User Space اجرا می‌ شود. وقتی Library یا برنامه System Call را درخواست می‌ کند ، CPU یک transition از User Mode به Kernel Mode انجام می‌ دهد و Kernel کنترل اجرای عملیات را به دست می‌گیرد. بعد از اینکه Kernel کار را انجام داد ، نتیجه را برمی‌ گرداند و اجرای برنامه دوباره در User Space ادامه پیدا می‌ کند :
+```bash
+User Space
+    │
+    │ System Call
+    ↓
+Kernel Space
+    │
+    │ return
+    ↓
+User Space
+```
+
+💡 یک نکته خیلی مهم اینکه هر function که اسمش شبیه System Call است ، لزوماً خودش مستقیماً وارد Kernel نمی‌ شود مثلاً()printf اصلاً System Call نیست در واقع()printf یک function در Library است و در User Space اجرا می‌ شود. در نهایت برای نمایش Data ممکن است از مسیرهایی مثل :
+```bash
+printf()
+   ↓
+glibc
+   ↓
+write()
+   ↓
+System Call
+   ↓
+Kernel
+```
+استفاده کند بنابراین همیشه این سه مورد Library Function ≠ System Call ≠ Kernel Function را از هم جدا کنید. 
+
+#### 💎 تفاوت Interface و Execution of operations
+
+وقتی می‌گوییم Interface ، منظورمان خود عملیات نیست بلکه منظور راهی است که از طریق آن درخواست یک عملیات را مطرح می‌ کنیم مثلاً فرض کن یک برنامه می‌ خواهد اطلاعات یک File را بخواند.
+```bash
+Application
+    ↓
+Library Function
+    ↓
+System Call Interface
+    ↓
+Kernel
+    ↓
+Execution of operations
+```
+در اینجا Library یک Interface در User Space در اختیار برنامه قرار می‌ دهد و System Call Interface راه رسمی درخواست سرویس از Kernel است و Kernel جایی است که درخواست واقعاً پردازش می‌ شود پس Interface می‌ گوید چطور درخواست بده ، اما اجرای واقعی داخل Kernel انجام می‌ شود.
+
+##### 🔹 یک مثال ساده برای درک Interface 
+
+فرض کنیم در Terminal این دستور ```cat /etc/hostname```  را اجرا کنیم و ما فقط ```server01``` را می‌بینیم ، اما پشت صحنه اتفاقات بیشتری رخ داده است. cat باید File را باز کند و محتوای آن را بخواند به‌ صورت ساده :
+
+```bash
+cat →
+ ↓
+Library / User-Space Interface
+ ↓
+System Call
+ ↓
+Kernel
+ ↓
+Filesystem
+ ↓
+Disk / Page Cache
+ ↓
+Data
+ ↓
+cat
+ ↓
+Terminal
+```
+مثلاً برای خواندن فایل ، Kernel باید عملیات‌ هایی مثل باز کردن File و خواندن Data را انجام دهد.
+
+
+
+
+
+
+
+
+#### 2️⃣ -  استفاده از Virtual Filesystem
+```bash
+User
+  ↓
+Shell
+  ↓
+Command / Executable
+  ↓
+File I/O
+  ↓
+VFS
+  ↓
+procfs (/proc) / sysfs (/sys)
+  ↓
+Kernel Subsystem
+  ↓
+Kernel Data Structures / Device Information
+  ↓
+User-Space Output
+```
+
+
+
+
+ 
 
 ---
 
