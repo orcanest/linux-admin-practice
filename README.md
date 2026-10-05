@@ -25,6 +25,7 @@
 | # | Chapter | Topics | 
 |---|---|---|
 | 01 | [Operating systems fundamental](https://github.com/orcanest/linux-admin-practice/tree/main/01-operating-systems-fundamental) | OS, Linux Architecture |
+| 02 | [System information](https://github.com/orcanest/linux-admin-practice/edit/main/02-system-information) | uname, hostname, hostnamectl, arch, lscpu, lsmem, free, uptime, date, cal, whoami, id |
 
 
 > 💡 در هر مبحث ```README.md``` شامل مطالب آموزشی و مفاهیم مربوط به آن موضوع است و ```LAB.md``` شامل سناریوها و تمرین‌ های عملی است.
