@@ -240,13 +240,6 @@ Terminal
 ```
 مثلاً برای خواندن فایل ، Kernel باید عملیات‌ هایی مثل باز کردن File و خواندن Data را انجام دهد.
 
-
-
-
-
-
-
-
 #### 2️⃣ -  استفاده از Virtual Filesystem
 ```bash
 User
@@ -268,12 +261,37 @@ Kernel Data Structures / Device Information
 User-Space Output
 ```
 
+این مسیر برای ابزارهایی که اطلاعات خود را از proc/ یا sys/ دریافت می‌ کنند اهمیت زیادی دارد. نکته مهم این است که مسیر واقعی هر Command باید بر اساس Implementation همان Command و Version مورد نظر بررسی شود و نباید یک مسیر ثابت را برای همه ابزارها فرض کرد.
+
+##### 🔹 شبه‌ فایل‌ سیستم‌ های proc/ و sys/
+
+فایل سیستم procfs یک Virtual Filesystem است که Kernel اطلاعات مختلفی درباره Process ها و وضعیت Runtime سیستم را از طریق آن در اختیار User Space قرار می‌ دهد ، برخی فایل‌ های مهم عبارت‌ اند از :
+
+```bash
+/proc/cpuinfo
+/proc/meminfo
+/proc/uptime
+/proc/loadavg
+/proc/version
+/proc/sys/kernel/
+```
+این اطلاعات معمولاً مستقیماً روی یک Disk File معمولی ذخیره نشده‌ اند ، بلکه هنگام دسترسی به Interface مربوطه توسط Kernel ارائه می‌ شوند ، به همین دلیل بسیاری از اطلاعات موجود در proc/ وضعیت جاری سیستم را نشان می‌ دهند.
+
+فایل سیستم sysfs یک Virtual Filesystem برای نمایش ساختار و روابط Object های Kernel است و اطلاعات مربوط به Device ها و Driver ها و Bus ها و CPU ها و Memory و بسیاری از بخش‌ های دیگر Kernel را در اختیار User Space قرار می‌ دهد برای مثال :
+
+```bash
+/sys/devices/system/cpu/
+/sys/devices/system/memory/
+```
+
+در نتیجه ابزارهایی مانند lscpu و lsmem می‌ توانند برای جمع‌ آوری بخشی از اطلاعات خود از sysfs استفاده کنند.
+
+##### 🔹 ساختار UTS Namespace
+
+برخی اطلاعات مربوط به هویت سیستم ، مانند Hostname و مشخصات Kernel در Linux با UTS Namespace مرتبط هستند. Kernel اطلاعات مربوط به UTS را در ساختارهای داخلی مرتبط با uts_namespace نگهداری می‌ کند و Process ها در یک UTS Namespace مشخص ، این اطلاعات را مشاهده می‌ کنند. این موضوع در محیط‌ های Container اهمیت زیادی دارد ، زیرا Container می‌ تواند UTS Namespace جداگانه‌ ای داشته باشد و در نتیجه Hostname متفاوتی نسبت به Host مشاهده کند. این جداسازی به این معنا نیست که کل اطلاعات سیستم برای Container کاملاً مستقل است بلکه فقط Namespace هایی که جدا شده‌اند ، View متفاوتی از منابع مربوطه ارائه می‌ کنند.
 
 
-
- 
-
----
+## 🐬 بررسی تفکیکی و عمیق Command ها
 
 ### 🔧 Unix Name command (uname)
 
@@ -286,56 +304,59 @@ User-Space Output
 Linux
 ```
 
-#### 🛠 Under the Hood
+#### 🧰 Under the Hood
 
-نحوه کارکرد uname در پشت صحنه به این صورت می باشد :
+وقتی این Command را اجرا می‌ کنیم، از لحظه اجرا تا نمایش Output دقیقاً چه اتفاقی می‌ افتد ؟
 
-**فراخوانی سیستمی (System Call) :** وقتی uname را در User Space اجرا می‌ کنیم ، برنامه از طریق glibc درخواست خود را به Kernel می‌ فرستد و uname هم System Call را اجرا می‌ کند. در این مرحله پردازنده از User Mode (Ring 3) وارد Kernel Mode (Ring 0) می‌ شود.
+🔸 اجرا در User Space : کاربر دستور uname را در Shell وارد می‌ کند. Shell با ایجاد یک Process جدید ، باینری مربوطه (معمولاً در /usr/bin/uname از مجموعه GNU Coreutils) را بارگذاری کرده و تابع ()main را اجرا می‌ کند.
 
-**ساختار داده کرنل (struct new_utsname) :** کرنل اطلاعات سیستم را در ساختاری به نام struct new_utsname نگه می‌ دارد. این ساختار در <linux/utsname.h> تعریف شده و بخشی از UTS Namespace است :
+🔸 فراخوانی Interface : ابزار uname برای دریافت داده به جای خواندن فایل از دیسک ، مستقیماً از تابع کتابخانه‌ ای ()uname  در C Standard Library (glibc) استفاده می‌ کند. این تابع یک System Call به نام sys_uname (یا sys_newuname) صادر می‌ کند.
 
-```c
-struct new_utsname {
-    char sysname[65];    /* نام سیستم‌عامل */
-    char nodename[65];   /* نام سیستم در شبکه */
-    char release[65];    /* نسخه انتشار کرنل */
-    char version[65];    /* تاریخ و نسخه ساخت کرنل */
-    char machine[65];    /* معماری سخت‌افزار */
-    char domainname[65]; /* نام دامنه */
-};
-```
-**ارتباط با proc/  یا (Procfs Interface) :** بخشی از این اطلاعات را می‌ توان از طریق فایل‌ های شبه‌ سیستمی زیر هم مشاهده کرد :
+🔸 لایه Kernel و Data Structure : با وقوع Context Switch و انتقال کنترل به Kernel Space ، هسته به Metadata management subsystem و ساختار داده struct uts_namespace مراجعه می‌ کند. در سیستم‌ های لینوکس مدرن، Metadata هویت سیستم درون ساختار struct new_utsname که درون uts_namespace قرار دارد نگهداری می‌ شود. این ساختار شامل فیلد های متنی زیر است :
+
+  - sysname: Kernel name (default: Linux).
+  - nodename: Network node name (Hostname).
+  - release: Kernel release version.
+  - version: Kernel build version and compilation date.
+  - machine: Hardware architecture (e.g., x86_64).
+
+🔸 تفاوت Interface و Data Source در اینکه Interface برای فراخوانی سیستمی ()uname است و Data Source هم ساختار داده struct uts_namespace در حافظه RAM هسته که در زمان ساخت هسته و بوت مقداردهی شده است.  شبه‌ فایل‌ های /proc/sys/kernel/ostype و /proc/sys/kernel/osrelease نیز رابط‌ های procfs برای نمایش همین داده‌ های موجود در uts_namespace هستند.
+
+🔸 بازگشت داده و پردازش خروجی : هسته داده‌ های موجود در struct new_utsname را به آرگومان اشاره‌ گر حافظه در User Space کپی می‌ کند. سپس دستور uname بر اساس Option های ورودی مانند a- یا r- ، سوئیچ‌ های مربوطه را بررسی کرده ، رشته‌ ها را کنار هم قرار داده و خروجی را در stdout چاپ می‌ کند.
+
+🔸 بخشی از اطلاعات مرتبط با uname در Interface های proc/ نیز قابل مشاهده هستند اما نباید فرض کرد که uname صرفاً با خواندن همین فایل‌ ها کار می‌ کند. uname در Linux Interface مستقیمی برای دریافت UTS Information دارد ، برای مثال :
+- /proc/sys/kernel/ostype
+- /proc/sys/kernel/osrelease
+- /proc/version
+
+#### ✅ Linux Administration
+
+یکی از کاربرد های مهم uname -r بررسی Kernel Release فعلی است ، این مقدار معمولاً هنگام بررسی Kernel Modules نیز اهمیت دارد :
 ```bash
-/proc/sys/kernel/ostype/ ───> معادل sysname
-/proc/sys/kernel/hostname/ ───> معادل nodename
-/proc/sys/kernel/osrelease/ ───> معادل release
-/proc/sys/kernel/version/ ───> معادل version
+:~$ ls -l /lib/modules/$(uname -r)
+total 8076
+lrwxrwxrwx  1 root root      39 Sep  9 19:31 build -> /usr/src/linux-headers-7.0.0-38-generic
+drwxr-xr-x  2 root root    4096 Sep  9 19:31 initrd
+drwxr-xr-x 22 root root    4096 Oct  2 17:58 kernel
+drwxr-xr-x  2 root root    4096 Oct  2 17:39 misc
+-rw-r--r--  1 root root 1817568 Oct  2 17:58 modules.alias
+-rw-r--r--  1 root root 1760629 Oct  2 17:58 modules.alias.bin
+-rw-r--r--  1 root root   10431 Sep  9 19:31 modules.builtin
+-rw-r--r--  1 root root   73581 Oct  2 17:58 modules.builtin.alias.bin
+-rw-r--r--  1 root root   12411 Oct  2 17:58 modules.builtin.bin
+-rw-r--r--  1 root root  159067 Sep  9 19:31 modules.builtin.modinfo
+-rw-r--r--  1 root root  963682 Oct  2 17:58 modules.dep
+-rw-r--r--  1 root root 1263280 Oct  2 17:58 modules.dep.bin
+-rw-r--r--  1 root root     353 Oct  2 17:58 modules.devname
+-rw-r--r--  1 root root  282013 Sep  9 19:31 modules.order
+-rw-r--r--  1 root root    2384 Oct  2 17:58 modules.softdep
+-rw-r--r--  1 root root  852538 Oct  2 17:58 modules.symbols
+-rw-r--r--  1 root root 1024198 Oct  2 17:58 modules.symbols.bin
+drwxr-xr-x  3 root root    4096 Oct  2 00:53 ubuntu
+drwxr-xr-x  3 root root    4096 Oct  2 00:53 vdso
 ```
 
-#### 📊 Data Flow Diagram
-
-```
-+-------------------------------------------------------------------+
-|                     USER SPACE (Ring 3)                           |
-| [ uname CLI Utility ]                                             |
-|          │                                                        |
-|          ▼ (glibc Wrapper)                                        |
-| syscall: uname(&amp;buf)                                          |
-+------------│------------------------------------------------------+
-             │ Switch to Kernel Mode (Ring 0 via sysenter/syscall)
-+------------v------------------------------------------------------+
-|                   KERNEL SPACE (Ring 0)                           |
-| [ sys\_uname() Kernel Function ]                                  |
-|          │                                                        |
-|          ▼                                                        |
-| Reads from active UTS Namespace:                                  |
-| current-&gt;nsproxy-&gt;uts\_ns-&gt;name (struct new\_utsname)    |
-|          │                                                        |
-|          ▼                                                        |
-| Copy struct data back to User Space Buffer                        |
-+-------------------------------------------------------------------+
-```
-
+برای مثال ، Administrator می‌ تواند بررسی کند آیا Kernel جدید واقعاً بعد از Reboot در حال اجرا است یا سیستم هنوز با Kernel قبلی Boot شده است.
 
 #### ⚙️ uname Options
 
@@ -415,22 +436,6 @@ x86_64
 GNU/Linux
 ```
 
-
-#### 🔩 Practical Examples in Shell Scripting
-
-- نصب خودکار Header های kernel متناظر با نسخه در حال اجرا :
-```bash
-sudo apt install linux-headers-$(uname -r)
-```
-
-- بررسی ۶۴ بیتی بودن معماری سیستم در اسکریپت :
-```bash
-if [ "$(uname -m)" = "x86\_64" ]; then
-    echo "64-bit Architecture detected."
-fi
-```
-
-
 #### 💡 Tips
 
 - دستور uname فقط مخصوص Linux نیست و در سیستم‌ های Unix و سیستم‌ هایی مثل FreeBSD ، OpenBSD و macOS هم وجود دارد.
@@ -445,13 +450,27 @@ initrd  misc    modules.alias.bin  modules.builtin.alias.bin  modules.builtin.mo
 
 ### 🔧 hostname command
 
-برای دیدن یا تنظیم Hostname سیستم استفاده می‌ شود یعنی همان نامی که سیستم در شبکه با آن شناخته می‌ شود.
-
-- **خروجی :** اگر hostname را بدون گزینه اجرا کنید ، Hostname فعلی سیستم را نشان می‌ دهد :
+دستور hostname برای نمایش یا تغییر Runtime Hostname سیستم استفاده می‌ شود. اگر hostname را بدون گزینه اجرا کنید ، Hostname فعلی سیستم را نشان می‌ دهد :
 ```bash
 :~$ hostname
-orcanestlab
+myhost.example.com
 ```
+
+#### 🧰 Under the Hood
+
+وقتی این Command را اجرا می‌ کنیم ، از لحظه اجرا تا نمایش Output دقیقاً چه اتفاقی می‌ افتد؟
+
+🔸 اجرا در User Space : Shell پردازش فرعی برای /bin/hostname اجرا می‌کند.
+
+🔸 فراخوانی Interface : ابزار hostname از فراخوانی‌ های سیستمی POSIX شامل ()gethostname (برای خواندن) یا()sethostname (برای تنظیم) استفاده می‌ کند.
+
+🔸 لایه Kernel و Data Source : اول Interface فراخوانی سیستمی ()gethostname می کند و Data  Source  فیلد nodename درون ساختار struct uts_namespace جاری پردازش می کند. هنگام اجرا ، kernel مقدار nodename را از حافظه استخراج کرده و به User Space بازمی‌ گرداند. اگر دستور همراه با Option هایی مانند f- برای FQDN اجرا شود ، ابزار hostname از طریق کتابخانه NSS (Name Service Switch) و تابع ()getaddrinfo ، فایل‌ های /etc/hosts و /etc/nsswitch.conf یا DNS را جستجو می‌ کند تا نام کامل دامنه را استخراج کند.
+
+🔸ذخیره‌ سازی و پایداری : تغییر نام با دستور hostname فقط متغیر حافظه کرنل (Runtime) را تغییر می‌ دهد و پس از Reboot پاک می‌ شود. برای پایداری ، تغییرات باید در فایل /etc/hostname بنویسد.
+
+#### 🔩 Configuration
+
+در بسیاری از Linux Distribution ها ، Static Hostname در فایل /etc/hostname نگهداری می‌شود ، اما مدیریت Hostname در Distribution های مختلف می‌ تواند توسط ابزارها و سرویس‌ های مختلف انجام شود.
 
 #### ⚙️ hostname Options
 
@@ -460,7 +479,7 @@ orcanestlab
 نام کامل سیستم به همراه Domain را نمایش می‌ دهد.
 ```bash
 :~$ hostname -f
-orcanestlab
+server01.example.com
 ```
 
 - ##### hostname -i
@@ -468,7 +487,15 @@ orcanestlab
 میتواند IP مربوط به Hostname را نمایش می‌ دهد.
 ```bash
 :~$ hostname -i
-127.0.1.1
+127.0.1.1 / 192.168.1.10
+```
+
+- ##### hostname -I
+
+آدرس‌ های IP اختصاص داده‌ شده به Interface های سیستم را نمایش می‌ دهد.
+```bash
+$ hostname -I
+192.168.1.10 10.0.0.5
 ```
 
 - ##### hostname -A
@@ -483,8 +510,10 @@ orcanestlab.bbrouter
 
 با دستور ```sudo hostname new_name``` می‌ توان Hostname را تغییر داد ، این تغییر معمولاً موقتی است و بعد از Reboot باقی نمی‌ ماند. برای اینکه تغییر دائمی باشد ، بسته به توزیع Linux باید تنظیمات مربوط به Hostname ، مثل ```etc/hostname/``` و ``` etc/hosts/```  یا تنظیمات شبکه ، به‌ درستی تغییر کنند.
 ```bash
-:~$ sudo hostname alexAdmin
+:~$ sudo hostname orange
 ```
+
+این تغییر Runtime است و نحوه حفظ آن پس از Reboot به روش مدیریت Hostname در Distribution بستگی دارد. برای Configuration دائمی ، بهتر است از ابزار مدیریت Hostname همان Distribution مانند hostnamectl در سیستم‌ های مبتنی بر systemd استفاده شود.
 
 ---
 
