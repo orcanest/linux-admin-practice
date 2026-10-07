@@ -1173,7 +1173,7 @@ date +%M → Minute
 date +%S → Seconde
 32
 
-date '+%Y-%m-%d %H:%M:%S' → Date $ time
+date '+%Y-%m-%d %H:%M:%S' → Date & time
 2026-10-05 12:30:45
 ```
 
