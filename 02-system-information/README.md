@@ -519,9 +519,7 @@ orcanestlab.bbrouter
 
 ### 🔧 hostnamectl commmand
 
-یک ابزار مربوط به سیستم‌ های مبتنی بر Systemd است که برای مشاهده و مدیریت Hostname و بعضی اطلاعات هویتی سیستم استفاده می‌ شود.
-
-- **خروجی :** اگر hostnamectl را بدون آرگومان اجرا کنید ، اطلاعات مختلفی از سیستم نمایش داده می‌ شود ، از جمله :
+ابزار مدیریت Hostname و برخی اطلاعات شناسایی سیستم در محیط‌ های مبتنی بر systemd است. اگر hostnamectl را بدون آرگومان اجرا کنید ، اطلاعات مختلفی از سیستم نمایش داده می‌ شود ، از جمله :
   - Static Hostname
   - Icon Name
   - Chassis
@@ -532,3 +530,209 @@ orcanestlab.bbrouter
   - Kernel
   - Architecture
   - Hardware Vendor
+
+```bach
+:~$ hostnamectl
+ Static hostname: ASUS
+       Icon name: computer-laptop
+         Chassis: laptop 💻
+      Machine ID: 46eda155dc23417aa5e3feaa19329sce
+         Boot ID: 48f9909c43fc49ed9b903c17daopuj28
+Operating System: Ubuntu 24.04.5 LTS                  
+          Kernel: Linux 7.0.0-38-generic
+    Architecture: x86-64
+ Hardware Vendor: ASUS
+  Hardware Model: ASUS vivobook Laptop 15-Sca0xxx
+Firmware Version: F.29
+   Firmware Date: Tue 2025-04-22
+    Firmware Age: 1y 5month 2w 1d
+```
+
+#### 🧰 Under the Hood
+
+وقتی این Command را اجرا می‌ کنیم ، از لحظه اجرا تا نمایش Output دقیقاً چه اتفاقی می‌ افتد ؟
+
+- **اجرا در User Space :** اول دستور ```/usr/bin/hostnamectl``` اجرا می شود. این دستور بخشی از ابزارهای systemd هست و در User Space اجرا می شود.
+- **ارتباط با systemd-hostnamed از طریق D-Bus :** اینجا یک نکته مهم وجود دارد ، برخلاف روش‌ های قدیمی تغییر یا دریافت hostname ، خود hostnamectl مستقیماً System Call خاصی برای انجام این کار صدا نمی‌ زند. در عوض، از طریق IPC و روی D-Bus ، یک پیام برای سرویس systemd-hostnamed.service ارسال می‌ کند.
+- **پردازش درخواست توسط systemd-hostnamed :** سرویس systemd-hostnamed در پشت صحنه درخواست را دریافت می‌ کند و اطلاعات مختلف مربوط به سیستم را از منابع مختلف جمع‌ آوری می‌کند. مهم‌ ترین این منابع عبارت‌ اند از :
+
+  - **اطلاعات Static Hostname** از فایل /etc/hostname خوانده می‌ شود.
+  - **اطلاعات Pretty Hostname و Location و Chassis** از فایل /etc/machine-info  گرفته می‌شوند.
+  - **اطلاعات Machine ID** از فایل /etc/machine-id  خوانده می‌ شود.
+  - **اطلاعات Boot ID** از فایل مجازی /proc/sys/kernel/random/boot_id دریافت می‌ شود.
+  - **اطلاعات Virtualization** که برای تشخیص اینکه سیستم روی چه نوع Hypervisor اجرا می‌ شود ، مثل DMI/SMBIOS یا مسیر /sys/hypervisor بررسی می‌ شوند.
+  - **اطلاعات Operating System** مربوط به توزیع لینوکس از فایل /etc/os-release خوانده می‌ شود.
+  - **اطلاعات Kernel و Architecture** مربوط به نسخه کرنل و معماری سیستم هم از طریق تابع()uname به دست می آید.
+
+در نتیجه ، systemd-hostnamed فقط مسئول hostname نیست بلکه اطلاعات مختلفی از وضعیت و مشخصات سیستم جمع آوری می‌کند.
+
+-  **بازگردانی اطلاعات به hostnamectl :** بعد از اینکه systemd-hostnamed اطلاعات مورد نیاز را جمع‌ آوری کرد ، نتیجه را دوباره از طریق D-Bus به hostnamectl برمی‌ گرداند.
+
+در نهایت ، hostnamectl این اطلاعات رو به شکل **Key-Value** مرتب و روی ترمینال نمایش می‌ دهد.
+
+```bash
+User
+│
+│ Execution of hostnamectl
+▼
+/usr/bin/hostnamectl
+│
+│ D-Bus / IPC
+▼
+systemd-hostnamed.service
+│
+├── /etc/hostname
+├── /etc/machine-info
+├── /etc/machine-id
+├── /etc/os-release
+├── /proc/sys/kernel/random/boot_id
+├── /sys/hypervisor
+├── DMI / SMBIOS
+└── uname()
+│
+│ Collected information
+▼
+systemd-hostnamed
+│
+│ D-Bus
+▼
+hostnamectl
+│
+▼
+Display information in the terminal
+```
+
+#### 🔩 Configuration
+
+اطلاعات مرتبط می‌ تواند شامل موارد زیر باشد :
+```bash
+/etc/hostname
+/etc/machine-info
+/etc/machine-id
+/etc/os-release
+/proc/sys/kernel/random/boot_id
+```
+
+مفاهیم مهم :
+
+- ** مفهوم Static Hostname :** نامی که به‌ صورت دائمی Configuration می‌ شود.
+- ** مفهوم Transient Hostname :** نامی که Runtime و معمولاً توسط سرویس‌ های مدیریتی شبکه یا مکانیزم‌ های دیگر تعیین می‌ شود.
+- ** مفهوم Pretty Hostname :** نام قابل نمایش و آزاد تر برای معرفی سیستم.
+- ** مفهوم Machine ID :** شناسه‌ ای که سیستم برای شناسایی Instance سیستم‌ عامل استفاده می‌ کند.
+- ** مفهوم Boot ID :** شناسه مربوط به Boot جاری.
+- ** مفهوم Operating System Information :** اطلاعاتی که معمولاً از /etc/os-release قابل مشاهده است.
+
+#### ⚙️ hostnamectl Options
+
+- ##### hostnamectl status
+
+اطلاعاتی مثل hostname ، سیستم‌عامل ، Kernel ، معماری و Virtualization رو نمایش می‌ دهد.
+```bash
+:~$ hostnamectl status
+Static hostname: ASUS
+       Icon name: computer-laptop
+         Chassis: laptop 💻
+      Machine ID: 46eda155dc23417aa5e3feaa19329sce
+         Boot ID: 48f9909c43fc49ed9b903c17daopuj28
+Operating System: Ubuntu 24.04.5 LTS                  
+          Kernel: Linux 7.0.0-38-generic
+    Architecture: x86-64
+ Hardware Vendor: ASUS
+  Hardware Model: ASUS vivobook Laptop 15-Sca0xxx
+Firmware Version: F.29
+   Firmware Date: Tue 2025-04-22
+    Firmware Age: 1y 5month 2w 1d
+```
+
+- ##### hostnamectl set-hostname
+
+تغییر hostname سیستم مثلاً به web01.
+```bash
+:~$ sudo hostnamectl set-hostname web01
+```
+
+- ##### hostnamectl set-chassis
+
+مشخص کردن نوع سیستم که به systemd می‌ گوید این سیستم از نوع server است.
+```bash
+:~$ sudo hostnamectl set-chassis server
+```
+مقادیر دیگر :
+```bash
+desktop
+laptop
+server
+vm
+container
+```
+
+- ##### hostnamectl set-deployment
+
+مشخص می‌ کند سیستم در محیط production قرار دارد.
+```bash
+:~$ sudo hostnamectl set-deployment production
+```
+مثلاً :
+```bash
+production
+development
+testing
+```
+
+- ##### hostnamectl set-location 
+
+موقعیت سیستم را تنظیم می‌ کند.
+```bash
+:~$ sudo hostnamectl set-location "Tehran"
+```
+
+- ##### hostnamectl --static
+
+نمایش Static Hostname که web01 همان hostname اصلی است که معمولاً در /etc/hostname ذخیره می‌ شود.
+```bash
+:~$ hostnamectl --static
+web01
+```
+
+- ##### hostnamectl --pretty
+
+نمایش Pretty Hostname که اگر قبلاً تنظیم شده باشه Production Web Server این hostname می‌ تواند شامل فاصله و حروف خوانا تر باشه.
+```bash
+:~$ hostnamectl --pretty
+Production Web Server
+```
+
+- ##### hostnamectl --transient
+
+نمایش Transient Hostname که hostname موقتی سیستم را نمایش می‌ دهد این مقدار ممکنه توسط شبکه یا سرویس‌های دیگر تعیین شود و لزوماً در /etc/hostname ذخیره نشده باشد.
+```bash
+:~$ hostnamectl --transient
+```
+
+- ##### hostnamectl --json
+
+خروجی JSON که اطلاعات رو به شکل JSON برمی‌ گرداند و برای اسکریپت‌ نویسی و پردازش خودکار خیلی کاربردی است.
+
+```bash
+:~$ hostnamectl --json=pretty status
+```
+مثلاً :
+```JSON
+{
+  "Hostname": "web01",
+  "OperatingSystem": "Ubuntu 24.04 LTS",
+  "Kernel": "Linux 6.8.0",
+  "Architecture": "x86-64"
+}
+```
+
+> 💡 در نسخه‌ های مختلف systemd ممکنه بعضی subcommand ها یا option ها کمی متفاوت باشند. برای دیدن option های دقیق روی همان سیستم ، بهترین مرجع man hostnamectl و hostnamectl --help هستند.
+#### ✅ Linux Administration
+
+دستور hostnamectl برای مدیریت یکپارچه Hostname در سیستم‌ های مبتنی بر systemd بسیار کاربردی است و معمولاً انتخاب مناسبی نسبت به ویرایش دستی چند فایل مختلف است.
+
+---
+
+### 🔧 arch commmand
+
+
