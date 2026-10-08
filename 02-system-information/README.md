@@ -308,26 +308,15 @@ Linux
 
 وقتی این Command را اجرا می‌ کنیم، از لحظه اجرا تا نمایش Output دقیقاً چه اتفاقی می‌ افتد ؟
 
-🔸 اجرا در User Space : کاربر دستور uname را در Shell وارد می‌ کند. Shell با ایجاد یک Process جدید ، باینری مربوطه (معمولاً در /usr/bin/uname از مجموعه GNU Coreutils) را بارگذاری کرده و تابع ()main را اجرا می‌ کند.
-
-🔸 فراخوانی Interface : ابزار uname برای دریافت داده به جای خواندن فایل از دیسک ، مستقیماً از تابع کتابخانه‌ ای ()uname  در C Standard Library (glibc) استفاده می‌ کند. این تابع یک System Call به نام sys_uname (یا sys_newuname) صادر می‌ کند.
-
-🔸 لایه Kernel و Data Structure : با وقوع Context Switch و انتقال کنترل به Kernel Space ، هسته به Metadata management subsystem و ساختار داده struct uts_namespace مراجعه می‌ کند. در سیستم‌ های لینوکس مدرن، Metadata هویت سیستم درون ساختار struct new_utsname که درون uts_namespace قرار دارد نگهداری می‌ شود. این ساختار شامل فیلد های متنی زیر است :
-
+هنگام اجرای دستور uname ابتدا کاربر آن را در Shell وارد می‌ کند و Shell با ایجاد یک Process جدید باینری مربوط به این دستور که معمولاً /usr/bin/uname از مجموعه GNU Coreutils است را در User Space بارگذاری کرده و تابع ()main را اجرا می‌ کند. ابزار uname برای دریافت اطلاعات سیستم به‌ جای خواندن مستقیم فایل از دیسک از تابع کتابخانه‌ ای ()uname در C Standard Library (glibc) استفاده می‌ کند. این تابع در نهایت یک System Call مانند sys_uname یا در پیاده‌ سازی‌ های جدیدتر sys_newuname را فراخوانی می‌ کند. پس از انتقال کنترل از User Space به Kernel Space و انجام عملیات مربوط به System Call کرنل به اطلاعات هویتی سیستم در ساختار struct uts_namespace دسترسی پیدا می‌ کند. در سیستم‌ های لینوکس مدرن اطلاعات اصلی در ساختار struct new_utsname نگهداری می‌ شود که بخشی از uts_namespace است و شامل فیلد های متنی مربوط به مشخصات سیستم مانند نام سیستم‌عامل (sysname) و نام میزبان (nodename) و نسخه انتشار کرنل (release) و نسخه دقیق کرنل (version) و معماری ماشین (machine) است. کرنل این اطلاعات را در اختیار System Call قرار داده و نتیجه را به User Space بازمی‌ گرداند و سپس ابزار uname بر اساس Option های مشخص‌ شده توسط کاربر فیلد های مورد نظر را استخراج و قالب‌ بندی کرده و در نهایت نتیجه را در stdout نمایش می‌ دهد :
   - sysname: Kernel name (default: Linux).
   - nodename: Network node name (Hostname).
   - release: Kernel release version.
   - version: Kernel build version and compilation date.
   - machine: Hardware architecture (e.g., x86_64).
 
-🔸 تفاوت Interface و Data Source در اینکه Interface برای فراخوانی سیستمی ()uname است و Data Source هم ساختار داده struct uts_namespace در حافظه RAM هسته که در زمان ساخت هسته و بوت مقداردهی شده است.  شبه‌ فایل‌ های /proc/sys/kernel/ostype و /proc/sys/kernel/osrelease نیز رابط‌ های procfs برای نمایش همین داده‌ های موجود در uts_namespace هستند.
+تفاوت Interface و Data Source در این است که Interface مسیر دسترسی برنامه به اطلاعات را فراهم می‌ کند و در مورد uname این مسیر از طریق System Call و ()uname انجام می‌ شود و Data Source اطلاعاتی است که کرنل در ساختار struct uts_namespace و ساختار struct new_utsname در Kernel Space نگهداری می‌ کند و این اطلاعات در زمان راه‌ اندازی سیستم مقداردهی می‌ شوند. بخشی از همین اطلاعات از طریق شبه‌ فایل‌ های procfs مانند /proc/sys/kernel/ostype و /proc/sys/kernel/osrelease و /proc/version نیز در اختیار User Space قرار می‌ گیرد اما نباید فرض کرد که دستور uname صرفاً با خواندن این فایل‌ ها کار می‌ کند. در واقع uname در لینوکس از یک Interface مستقیم برای دریافت UTS Information استفاده می‌ کند. پس از اجرای System Call هسته داده‌ های موجود در struct new_utsname را در فضای حافظه‌ ای که برنامه در User Space مشخص کرده است کپی می‌ کند و کنترل را به برنامه بازمی‌ گرداند. سپس دستور uname بر اساس Option های وارد شده توسط کاربر مانند a- یا r- فیلد های مورد نظر را انتخاب کرده و رشته‌ های مربوط به آن‌ ها را در کنار یکدیگر قرار می‌ دهد و در نهایت خروجی قالب‌ بندی‌ شده را در stdout نمایش می‌ دهد.
 
-🔸 بازگشت داده و پردازش خروجی : هسته داده‌ های موجود در struct new_utsname را به آرگومان اشاره‌ گر حافظه در User Space کپی می‌ کند. سپس دستور uname بر اساس Option های ورودی مانند a- یا r- ، سوئیچ‌ های مربوطه را بررسی کرده ، رشته‌ ها را کنار هم قرار داده و خروجی را در stdout چاپ می‌ کند.
-
-🔸 بخشی از اطلاعات مرتبط با uname در Interface های proc/ نیز قابل مشاهده هستند اما نباید فرض کرد که uname صرفاً با خواندن همین فایل‌ ها کار می‌ کند. uname در Linux Interface مستقیمی برای دریافت UTS Information دارد ، برای مثال :
-- /proc/sys/kernel/ostype
-- /proc/sys/kernel/osrelease
-- /proc/version
 
 #### ✅ Linux Administration
 
@@ -459,14 +448,7 @@ myhost.example.com
 #### 🧰 Under the Hood
 
 وقتی این Command را اجرا می‌ کنیم ، از لحظه اجرا تا نمایش Output دقیقاً چه اتفاقی می‌ افتد؟
-
-🔸 اجرا در User Space : Shell پردازش فرعی برای /bin/hostname اجرا می‌کند.
-
-🔸 فراخوانی Interface : ابزار hostname از فراخوانی‌ های سیستمی POSIX شامل ()gethostname (برای خواندن) یا()sethostname (برای تنظیم) استفاده می‌ کند.
-
-🔸 لایه Kernel و Data Source : اول Interface فراخوانی سیستمی ()gethostname می کند و Data  Source  فیلد nodename درون ساختار struct uts_namespace جاری پردازش می کند. هنگام اجرا ، kernel مقدار nodename را از حافظه استخراج کرده و به User Space بازمی‌ گرداند. اگر دستور همراه با Option هایی مانند f- برای FQDN اجرا شود ، ابزار hostname از طریق کتابخانه NSS (Name Service Switch) و تابع ()getaddrinfo ، فایل‌ های /etc/hosts و /etc/nsswitch.conf یا DNS را جستجو می‌ کند تا نام کامل دامنه را استخراج کند.
-
-🔸ذخیره‌ سازی و پایداری : تغییر نام با دستور hostname فقط متغیر حافظه کرنل (Runtime) را تغییر می‌ دهد و پس از Reboot پاک می‌ شود. برای پایداری ، تغییرات باید در فایل /etc/hostname بنویسد.
+هنگام اجرای دستور hostname ابتدا Shell یک پردازش فرعی برای اجرای باینری /bin/hostname در User Space ایجاد می‌ کند. ابزار hostname برای خواندن یا تنظیم نام میزبان از رابط‌ های سیستمی مانند()gethostname  برای دریافت hostname و ()sethostname  برای تغییر آن استفاده می‌ کند. در زمان اجرای ()gethostname  درخواست از طریق رابط System Call وارد Kernel Space می‌ شود و کرنل مقدار nodename را از ساختار مربوط به UTS Namespace پردازش جاری دریافت کرده و آن را به User Space بازمی‌ گرداند. اگر دستور با Option هایی مانند f- برای دریافت FQDN اجرا شود ابزار hostname علاوه بر hostname محلی از طریق کتابخانه NSS (Name Service Switch) و تابع ()getaddrinfo اقدام به Resolve کردن نام می‌ کند و بر اساس تنظیمات /etc/nsswitch.conf می‌ تواند منابعی مانند /etc/hosts یا DNS را بررسی کند تا نام کامل دامنه را به دست آورد. در حالت تنظیم hostname نیز()sethostname مقدار جدید را در وضعیت Runtime کرنل و در محدوده UTS Namespace مربوط به پردازش اعمال می‌ کند. این تغییر به‌ صورت پیش‌ فرض فقط در حافظه کرنل باقی می‌ ماند و پس از Reboot از بین می‌ رود. برای ایجاد تغییر پایدار باید مقدار hostname در فایلی مانند /etc/hostname ذخیره شود تا در زمان Boot مجدداً توسط سیستم اعمال شود.
 
 #### 🔩 Configuration
 
@@ -552,24 +534,7 @@ Firmware Version: F.29
 
 وقتی این Command را اجرا می‌ کنیم ، از لحظه اجرا تا نمایش Output دقیقاً چه اتفاقی می‌ افتد ؟
 
-- **اجرا در User Space :** اول دستور ```/usr/bin/hostnamectl``` اجرا می شود. این دستور بخشی از ابزارهای systemd هست و در User Space اجرا می شود.
-- **ارتباط با systemd-hostnamed از طریق D-Bus :** اینجا یک نکته مهم وجود دارد ، برخلاف روش‌ های قدیمی تغییر یا دریافت hostname ، خود hostnamectl مستقیماً System Call خاصی برای انجام این کار صدا نمی‌ زند. در عوض، از طریق IPC و روی D-Bus ، یک پیام برای سرویس systemd-hostnamed.service ارسال می‌ کند.
-- **پردازش درخواست توسط systemd-hostnamed :** سرویس systemd-hostnamed در پشت صحنه درخواست را دریافت می‌ کند و اطلاعات مختلف مربوط به سیستم را از منابع مختلف جمع‌ آوری می‌کند. مهم‌ ترین این منابع عبارت‌ اند از :
-
-  - **اطلاعات Static Hostname** از فایل /etc/hostname خوانده می‌ شود.
-  - **اطلاعات Pretty Hostname و Location و Chassis** از فایل /etc/machine-info  گرفته می‌شوند.
-  - **اطلاعات Machine ID** از فایل /etc/machine-id  خوانده می‌ شود.
-  - **اطلاعات Boot ID** از فایل مجازی /proc/sys/kernel/random/boot_id دریافت می‌ شود.
-  - **اطلاعات Virtualization** که برای تشخیص اینکه سیستم روی چه نوع Hypervisor اجرا می‌ شود ، مثل DMI/SMBIOS یا مسیر /sys/hypervisor بررسی می‌ شوند.
-  - **اطلاعات Operating System** مربوط به توزیع لینوکس از فایل /etc/os-release خوانده می‌ شود.
-  - **اطلاعات Kernel و Architecture** مربوط به نسخه کرنل و معماری سیستم هم از طریق تابع()uname به دست می آید.
-
-در نتیجه ، systemd-hostnamed فقط مسئول hostname نیست بلکه اطلاعات مختلفی از وضعیت و مشخصات سیستم جمع آوری می‌کند.
-
--  **بازگردانی اطلاعات به hostnamectl :** بعد از اینکه systemd-hostnamed اطلاعات مورد نیاز را جمع‌ آوری کرد ، نتیجه را دوباره از طریق D-Bus به hostnamectl برمی‌ گرداند.
-
-در نهایت ، hostnamectl این اطلاعات رو به شکل **Key-Value** مرتب و روی ترمینال نمایش می‌ دهد.
-
+هنگام اجرای دستور hostnamectl ابتدا Shell باینری /usr/bin/hostnamectl را در User Space اجرا می‌ کند. این ابزار بخشی از مجموعه systemd است و برخلاف روش‌ های قدیمی دریافت یا تغییر hostname مستقیماً System Call خاصی برای انجام این عملیات فراخوانی نمی‌ کند و در عوض از طریق IPC و رابط D-Bus با سرویس systemd-hostnamed.service ارتباط برقرار می‌ کند و درخواست مورد نظر را برای این سرویس ارسال می‌ نماید. سپس systemd-hostnamed درخواست را دریافت کرده و اطلاعات مورد نیاز را از منابع مختلف سیستم جمع‌ آوری می‌ کند. Static Hostname از فایل /etc/hostname و Pretty Hostname و اطلاعات Location و Chassis از فایل /etc/machine-info و Machine ID از فایل /etc/machine-id و Boot ID از فایل مجازی /proc/sys/kernel/random/boot_id دریافت می‌ شوند. برای تشخیص وضعیت Virtualization نیز منابعی مانند DMI/SMBIOS و مسیر /sys/hypervisor بررسی می‌ شوند. اطلاعات مربوط به Operating System و توزیع لینوکس از فایل /etc/os-release و اطلاعات مربوط به Kernel و Architecture نیز از طریق رابط ()uname  دریافت می‌ شوند. بنابراین systemd-hostnamed علاوه بر مدیریت hostname می‌ تواند اطلاعات مختلفی درباره مشخصات و وضعیت سیستم در اختیار قرار دهد. پس از جمع‌ آوری اطلاعات مورد نیاز و آماده‌ سازی پاسخ توسط systemd-hostnamed نتیجه از طریق D-Bus به hostnamectl بازگردانده می‌ شود. در نهایت hostnamectl اطلاعات دریافت‌ شده را در User Space پردازش و به شکل Key-Value قالب‌ بندی کرده و روی ترمینال نمایش می‌ دهد.
 ```bash
 User
 │
@@ -1206,4 +1171,242 @@ Mon Oct  5 12:00:00 +0330 2026
 
 ### 🔧 cal commmand
 
+دستور cal یک تقویم متنی برای نمایش ماه یا سال ارائه می‌ کند.
+```bash
+:~$ cal
+    October 2026      
+Su Mo Tu We Th Fr Sa  
+             1  2  3  
+ 4  5  6  7  8  9 10  
+11 12 13 14 15 16 17  
+18 19 20 21 22 23 24  
+25 26 27 28 29 30 31  
+```
 
+#### 🧰 Under the Hood
+
+وقتی این Command را اجرا می‌ کنیم ، از لحظه اجرا تا نمایش Output دقیقاً چه اتفاقی می‌ افتد ؟
+
+هنگام اجرای دستور  cal، ابتدا Shell باینری /usr/bin/cal را در User Space اجرا می‌ کند. این ابزار برای دریافت تاریخ و زمان جاری سیستم، از رابط‌ های کتابخانه‌ ای مانند()time یا()clock_gettime استفاده می‌ کند و اطلاعات مربوط به زمان را از Kernel دریافت می‌ کند. جزئیات دقیق منبع داده و نحوه پیاده‌ سازی این بخش به نسخه و Implementation ابزار و کتابخانه‌ های مورد استفاده وابسته است. پس از دریافت تاریخ جاری ، محاسبات مربوط به تقویم ، از جمله تعیین تعداد روزهای ماه ، محاسبه روز آغازین ماه و تعیین موقعیت هر روز در جدول ، در User Space و با استفاده از الگوریتم‌ های تقویم‌ نگاری انجام می‌ شود. در نهایت ، cal جدول متنی تقویم را برای ماه یا سال مورد نظر تولید کرده ، در صورت نیاز روز جاری را مشخص می‌ کند و نتیجه را در stdout نمایش می‌ دهد.
+
+#### ⚙️ cal Options 
+
+- ##### cal <year>
+
+سال مشخص‌ شده را به‌ صورت کامل نمایش می‌ دهد.
+```bash
+:~$ cal 2026
+                            2026
+      January               February               March          
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  
+             1  2  3   1  2  3  4  5  6  7   1  2  3  4  5  6  7  
+ 4  5  6  7  8  9 10   8  9 10 11 12 13 14   8  9 10 11 12 13 14  
+11 12 13 14 15 16 17  15 16 17 18 19 20 21  15 16 17 18 19 20 21  
+18 19 20 21 22 23 24  22 23 24 25 26 27 28  22 23 24 25 26 27 28  
+25 26 27 28 29 30 31                        29 30 31              
+                                                                  
+
+       April                  May                   June          
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  
+          1  2  3  4                  1  2      1  2  3  4  5  6  
+ 5  6  7  8  9 10 11   3  4  5  6  7  8  9   7  8  9 10 11 12 13  
+12 13 14 15 16 17 18  10 11 12 13 14 15 16  14 15 16 17 18 19 20  
+19 20 21 22 23 24 25  17 18 19 20 21 22 23  21 22 23 24 25 26 27  
+26 27 28 29 30        24 25 26 27 28 29 30  28 29 30              
+                      31                                          
+
+        July                 August              September        
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  
+          1  2  3  4                     1         1  2  3  4  5  
+ 5  6  7  8  9 10 11   2  3  4  5  6  7  8   6  7  8  9 10 11 12  
+12 13 14 15 16 17 18   9 10 11 12 13 14 15  13 14 15 16 17 18 19  
+19 20 21 22 23 24 25  16 17 18 19 20 21 22  20 21 22 23 24 25 26  
+26 27 28 29 30 31     23 24 25 26 27 28 29  27 28 29 30           
+                      30 31                                       
+
+      October               November              December        
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  
+             1  2  3   1  2  3  4  5  6  7         1  2  3  4  5  
+ 4  5  6  7  8  9 10   8  9 10 11 12 13 14   6  7  8  9 10 11 12  
+11 12 13 14 15 16 17  15 16 17 18 19 20 21  13 14 15 16 17 18 19  
+18 19 20 21 22 23 24  22 23 24 25 26 27 28  20 21 22 23 24 25 26  
+25 26 27 28 29 30 31  29 30                 27 28 29 30 31
+
+:~$ cal 10 2026
+    October 2026      
+Su Mo Tu We Th Fr Sa  
+             1  2  3  
+ 4  5  6  7  8  9 10  
+11 12 13 14 15 16 17  
+18 19 20 21 22 23 24  
+25 26 27 28 29 30 31  
+
+```
+
+- ##### cal -3
+
+منظور از 3- یعنی ماه قبل + ماه فعلی + ماه بعد را نمایش دهد.
+```bash
+:~$ cal -3
+   September 2026         October 2026         November 2026      
+Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  Su Mo Tu We Th Fr Sa  
+       1  2  3  4  5               1  2  3   1  2  3  4  5  6  7  
+ 6  7  8  9 10 11 12   4  5  6  7  8  9 10   8  9 10 11 12 13 14  
+13 14 15 16 17 18 19  11 12 13 14 15 16 17  15 16 17 18 19 20 21  
+20 21 22 23 24 25 26  18 19 20 21 22 23 24  22 23 24 25 26 27 28  
+27 28 29 30           25 26 27 28 29 30 31  29 30  
+```
+
+- ##### cal -j
+
+منظور از -j یعنی Julian day ، در این حالت به‌ جای شماره‌ ی روز در ماه ، شماره‌ ی روز در سال نمایش داده می‌ شود.
+```bash
+:~$ cal -j
+       October 2026          
+ Su  Mo  Tu  We  Th  Fr  Sa  
+                274 275 276  
+277 278 279 280 281 282 283  
+284 285 286 287 288 289 290  
+291 292 293 294 295 296 297  
+298 299 300 301 302 303 304  
+```
+
+#### ✅ Linux Administration
+
+ابزار cal بیشتر یک ابزار ساده User-Space برای مشاهده Calendar است و برخلاف ابزارهایی مانند free یا uptime ارتباط مستقیم و مهمی با Kernel Monitoring ندارد.
+
+---
+
+### 🔧 whoami commmand
+
+دستور whoami نام User مرتبط با Effective UID (EUID) فرآیند جاری را نمایش می‌ دهد.
+```bash
+:~$ whoami
+orcanestlab
+```
+
+#### 🧰 Under the Hood
+
+وقتی این Command را اجرا می‌ کنیم ، از لحظه اجرا تا نمایش Output دقیقاً چه اتفاقی می‌ افتد ؟
+
+هنگام اجرای دستور whoami ، ابتدا Shell باینری /usr/bin/whoami را در User Space اجرا می‌ کند. این ابزار برای دریافت شناسه کاربری مؤثر (Effective User ID / EUID) از رابط()geteuid استفاده می‌ کند. این رابط در نهایت اطلاعات مربوط به Credentials فرآیند را از Kernel دریافت می‌کند ، جایی که شناسه کاربری مؤثر در ساختار cred مرتبط با task_struct فرآیند نگهداری می‌ شود. پس از دریافت مقدار EUID ، ابزار whoami آن را به تابع کتابخانه‌ ای getpwuid(euid) ارسال می‌ کند تا شناسه عددی کاربر به نام کاربری متناظر نگاشت شود. این تابع بر اساس تنظیمات NSS (Name Service Switch) در فایل /etc/nsswitch.conf ، منبع مناسب اطلاعات کاربران را بررسی می‌ کند. این منبع می‌ تواند فایل /etc/passwd یا سرویس‌ هایی مانند SSSD و سایر Backend های پشتیبانی‌ شده باشد. در صورت یافتن کاربر، اطلاعات آن در قالب ساختار struct passwd در اختیار برنامه قرار می‌ گیرد و whoami مقدار فیلد pw_name را استخراج کرده و نام کاربری را در stdout نمایش می‌ دهد.
+
+#### 🔩 Real UID vs Effective UID
+این تفاوت در مواردی مانند sudo و SetUID Programs و Privilege Changes اهمیت زیادی دارد :
+
+##### 🔻 Real UID
+کاربری که Process را ایجاد کرده است.
+
+##### 🔻 Effective UID
+این UID که Kernel در بسیاری از Permission Checks مربوط به Process مورد استفاده قرار می‌ دهد.
+
+#### ✅ Linux Administration
+
+دستور whoami برای بررسی سریع User Context مخصوصاً در Script ها و sudo و Automation و Cron و Troubleshooting Permission مفید است.
+
+---
+
+### 🔧 whoami commmand
+
+دستور id اطلاعات مربوط به Identity کاربر از جمله UID و GID و Primary Group و Supplementary Groups را نمایش می‌ دهد.
+```bash
+:~$ id
+uid=1000(orcanestlab) gid=1000(orcanestlab) groups=1000(orcanestlab),4(adm),24(cdrom),27(sudo),30(dip),46(plugdev),100(users),114(lpadmin)
+```
+
+
+#### 🧰 Under the Hood
+
+وقتی این Command را اجرا می‌ کنیم ، از لحظه اجرا تا نمایش Output دقیقاً چه اتفاقی می‌ افتد ؟
+
+هنگام اجرای دستور id ابتدا Shell باینری /usr/bin/id را در User Space اجرا می‌کند. این ابزار برای دریافت اطلاعات هویتی فرآیند جاری مجموعه‌ای از رابط‌های سیستمی شامل ()getuid برای دریافت Real UID و ()geteuid برای دریافت Effective UID و ()getgid برای دریافت Real GID و()getegid برای دریافت Effective GID و ()getgroups برای دریافت فهرست Supplementary Groups را فراخوانی می‌ کند. این مقادیر از اطلاعات مربوط به Credentials فرآیند در Kernel Space تأمین می‌ شوند که در ساختار cred مرتبط با task_struct نگهداری می‌ شوند. پس از دریافت شناسه‌ های عددی id برای تبدیل UID به نام کاربر از تابع ()getpwuid و برای تبدیل GID ها به نام گروه‌ ها از تابع ()getgrgid استفاده می‌ کند. این توابع بر اساس تنظیمات NSS (Name Service Switch) در /etc/nsswitch.conf منابعی مانند /etc/passwd و /etc/group یا سرویس‌ های دایرکتوری شبکه را جست‌ وجو می‌ کنند و اطلاعات مربوط به کاربر و گروه را در اختیار برنامه قرار می‌ دهند. در نهایت id اطلاعات دریافت‌ شده را در User Space پردازش و قالب‌ بندی کرده و خروجی را معمولاً به شکل uid=X(name) gid=Y(name) groups=Z(name)... در stdout نمایش می‌ دهد.
+
+#### ⚙️ id Options 
+
+- ##### id -u
+
+منظور از u- یعنی User ID که UID کاربر فعلی را نمایش می‌ دهد.
+```bash
+:~$  id -u
+1000
+```
+
+- ##### id -g
+
+منظور از g- یعنی Group ID اصلی کاربر به عبارتی Primary Group ID کاربر را نمایش می دهد.
+```bash
+:~$  id -g
+1000
+```
+
+- ##### id -G
+
+منظور از G- یعنی تمام Group ID های کاربر را نمایش می دهد که کاربر عضو این Group ID ها است.
+```bash
+:~$  id -G
+1000 4 24 27 30 46 100 114
+```
+
+- ##### id -un
+
+اینجا دو Option با هم ترکیب شده‌ اند که n- برای Name و u- برای User ID که نام کاربری مربوط به UID فعلی را نمایش می دهد مانند دستور whoami عمل می کند.
+```bash
+:~$  id -un
+orcanestlab
+```
+
+- ##### id -gn
+
+باز هم دو option ترکیب شده‌ اند که n- برای Name و g- برای Primary Group که نام Primary Group کاربر را نمایش می دهد.
+```bash
+:~$  id -gn
+orcanestlab
+```
+
+- ##### id -r
+
+این option کمی مهم‌ تر است. r- یعنی real ID در لینوکس ممکن است یک Process دارای دو نوع ID باشد ، Real ID و Effective ID که این موضوع مخصوصاً در بحث Setuid/Setgid اهمیت پیدا می‌ کند. به‌ صورت پیش‌ فرض id -u و id -g معمولاً Effective UID/GID را نشان می‌ دهند ولی id -r به‌ تنهایی معمولاً معنی کامل و مفیدی ندارد و در عمل بهتر است همراه u- یا g- استفاده شود.
+```bash
+:~$ id -r
+id: cannot print only names or real IDs in default format
+
+:~$  id -r -u → uid
+1000
+
+:~$  id -r -g → gid
+1000
+```
+
+#### ✅ Linux Administration
+
+ابزار id یکی از ابزارهای مهم برای Troubleshooting Permission است. برای مثال id username می‌تواند مشخص کند User عضو Group مورد نیاز هست یا خیر. این موضوع در خطاهایی مانند Permission denied اهمیت زیادی دارد.
+
+---
+
+### 🏁 Technical Summary
+
+این مجموعه Command ها در نگاه اول ساده به نظر می‌ رسند، اما در Linux Administration نقش مهمی در Information Gathering و Initial Troubleshooting دارند. نکته مهم این است که هر Command لزوماً مستقیماً به یک System Call خاص متصل نیست. بعضی Command ها از Kernel System Calls استفاده می‌ کنند ، بعضی اطلاعات را از proc/ و sys/ می‌ خوانند و بعضی نیز اطلاعات را از چند Interface مختلف جمع‌ آوری می‌ کنند. برای یک Linux Administrator ، ارزش اصلی این ابزارها فقط در دانستن Syntax آن‌ ها نیست بلکه در توانایی ارتباط دادن Output آن‌ ها با وضعیت واقعی سیستم است ، برای مثال :
+
+```
+uname
+  ↓
+Kernel Identity
+
+lscpu
+  ↓
+CPU Topology / Architecture
+------------------------------
+free
+  ↓
+Memory State
+
+uptime
+  ↓
+Uptime / Load
+
+whoami + id
+  ↓
+User Identity / Groups
+```
+
+وقتی این اطلاعات در کنار یکد یگر و همراه با ابزارهای تخصصی‌ تر مانند top ، vmstat ، iostat ، ss ، ps و journalctl بررسی شوند ، می‌ توانند بخش مهمی از فرآیند System Investigation و Troubleshooting را تشکیل دهند.
